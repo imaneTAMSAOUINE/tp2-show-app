@@ -7,6 +7,7 @@ const showRoutes = require('./routes/shows');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+console.log('Starting server setup...');
 app.use(cors());
 app.use(bodyParser.json());
 app.use('/uploads', express.static('uploads'));

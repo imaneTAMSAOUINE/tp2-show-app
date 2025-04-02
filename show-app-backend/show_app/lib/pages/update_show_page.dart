@@ -5,20 +5,42 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:show_app/config/api_config.dart';
 
-class AddShowPage extends StatefulWidget {
-  const AddShowPage({super.key, required Null Function() onShowAdded});
+class UpdateShowPage extends StatefulWidget {
+  final int showId; // ID du show à mettre à jour
+  final String initialTitle;
+  final String initialDescription;
+  final String initialCategory;
+  final String initialImageUrl;
+
+  const UpdateShowPage({
+    super.key,
+    required this.showId,
+    required this.initialTitle,
+    required this.initialDescription,
+    required this.initialCategory,
+    required this.initialImageUrl,
+  });
 
   @override
-  _AddShowPageState createState() => _AddShowPageState();
+  _UpdateShowPageState createState() => _UpdateShowPageState();
 }
 
-class _AddShowPageState extends State<AddShowPage> {
+class _UpdateShowPageState extends State<UpdateShowPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   String _selectedCategory = 'movie';
   File? _imageFile;
   final ImagePicker _picker = ImagePicker();
-  bool _isUploading = false;
+  bool _isUpdating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pré-remplir les champs avec les données initiales
+    _titleController.text = widget.initialTitle;
+    _descriptionController.text = widget.initialDescription;
+    _selectedCategory = widget.initialCategory;
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     final XFile? image = await _picker.pickImage(source: source);
@@ -29,33 +51,39 @@ class _AddShowPageState extends State<AddShowPage> {
     }
   }
 
-  Future<void> _addShow() async {
-    if (_titleController.text.isEmpty || _descriptionController.text.isEmpty || _imageFile == null) {
+  Future<void> _updateShow() async {
+    if (_titleController.text.isEmpty || _descriptionController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("All fields are required!")),
+        const SnackBar(content: Text("Title and description are required!")),
       );
       return;
     }
 
-    setState(() => _isUploading = true);
+    setState(() => _isUpdating = true);
 
-    var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/shows'));
+    var request = http.MultipartRequest(
+      'PUT',
+      Uri.parse('${ApiConfig.baseUrl}/shows/${widget.showId}'),
+    );
     request.fields['title'] = _titleController.text;
     request.fields['description'] = _descriptionController.text;
     request.fields['category'] = _selectedCategory;
-    request.files.add(await http.MultipartFile.fromPath('image', _imageFile!.path));
+
+    if (_imageFile != null) {
+      request.files.add(await http.MultipartFile.fromPath('image', _imageFile!.path));
+    }
 
     var response = await request.send();
-    setState(() => _isUploading = false);
+    setState(() => _isUpdating = false);
 
-    if (response.statusCode == 201) {
+    if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Show added successfully!")),
+        const SnackBar(content: Text("Show updated successfully!")),
       );
-      Navigator.pop(context, true); // Return to refresh home page
+      Navigator.pop(context, true); // Retourner à la page précédente
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to add show")),
+        const SnackBar(content: Text("Failed to update show")),
       );
     }
   }
@@ -63,7 +91,7 @@ class _AddShowPageState extends State<AddShowPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Add Show"), backgroundColor: Colors.blueAccent),
+      appBar: AppBar(title: const Text("Update Show"), backgroundColor: Colors.blueAccent),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -92,7 +120,9 @@ class _AddShowPageState extends State<AddShowPage> {
             ),
             const SizedBox(height: 10),
             _imageFile == null
-                ? const Center(child: Text("No Image Selected"))
+                ? widget.initialImageUrl.isNotEmpty
+                    ? Image.network(widget.initialImageUrl, height: 150, fit: BoxFit.cover)
+                    : const Center(child: Text("No Image Selected"))
                 : Image.file(_imageFile!, height: 150, fit: BoxFit.cover),
             const SizedBox(height: 10),
             Row(
@@ -111,14 +141,14 @@ class _AddShowPageState extends State<AddShowPage> {
               ],
             ),
             const SizedBox(height: 20),
-            _isUploading
+            _isUpdating
                 ? const Center(child: CircularProgressIndicator())
                 : SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _addShow,
+                      onPressed: _updateShow,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                      child: const Text("Add Show", style: TextStyle(color: Colors.white)),
+                      child: const Text("Update Show", style: TextStyle(color: Colors.white)),
                     ),
                   ),
           ],

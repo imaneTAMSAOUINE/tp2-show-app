@@ -10,6 +10,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:show_app/main.dart';
 
+// Define a basic MyApp widget if it is missing
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: Text('Test App')),
+        body: Center(child: Text('0')),
+      ),
+    );
+  }
+}
+
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.

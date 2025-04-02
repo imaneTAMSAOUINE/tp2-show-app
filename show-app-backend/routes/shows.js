@@ -1,73 +1,107 @@
 const express = require('express');
-const router = express.Router();
-const { check, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const multer = require('multer');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const db = require('../database'); // Assurez-vous que ce chemin pointe vers votre fichier de configuration SQLite
 
-// Configuration de multer pour le stockage des images
+const router = express.Router();
+
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+  destination: './uploads/',
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    cb(null, true);
   }
 });
 
-const upload = multer({ storage: storage });
+const validateShow = [
+  body('title').notEmpty().withMessage('Title is required'),
+  body('description').notEmpty().withMessage('Description is required'),
+  body('category').isIn(['movie', 'anime', 'serie']).withMessage('Category must be movie, anime, or serie')
+];
 
-// Configuration de SQLite
-const db = new sqlite3.Database('./database.sqlite');
-
-// Route pour obtenir tous les shows
-router.get('/', (req, res) => {
-    db.all('SELECT * FROM shows', [], (err, rows) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      res.json(rows); // Retourne les données sous forme de JSON
-    });
-  });
-
-// Route pour ajouter un nouveau show
-router.post('/', upload.single('image'), [
-  check('title').not().isEmpty().withMessage('Title is required'),
-  check('description').not().isEmpty().withMessage('Description is required'),
-  check('category').not().isEmpty().withMessage('Category is required'),
-], (req, res) => {
+// Routes CRUD pour les shows
+router.post('/', upload.single('image'), validateShow, (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
   }
 
   const { title, description, category } = req.body;
-  const image = req.file ? req.file.path : null;
+  const image = req.file ? `/uploads/${req.file.filename}` : null;
 
-  const sql = 'INSERT INTO shows (title, description, category, image) VALUES (?, ?, ?, ?)';
-  const params = [title, description, category, image];
-
-  db.run(sql, params, function (err) {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+  db.run(
+    'INSERT INTO shows (title, description, category, image) VALUES (?, ?, ?, ?)',
+    [title, description, category, image],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID, title, description, category, image });
     }
-    res.status(201).json({ id: this.lastID, title, description, category, image });
+  );
+});
+
+router.get('/', (req, res) => {
+  db.all('SELECT * FROM shows', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
   });
 });
 
-// Route pour supprimer un show
-router.delete('/:id', (req, res) => {
-  const { id } = req.params;
+router.get('/:id', [
+  param('id').isInt().withMessage('ID must be an integer')
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
 
-  const sql = 'DELETE FROM shows WHERE id = ?';
-  db.run(sql, id, function (err) {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+  db.get('SELECT * FROM shows WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Show not found' });
+    res.json(row);
+  });
+});
+
+router.put('/:id', upload.single('image'), validateShow, (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { title, description, category } = req.body;
+  const image = req.file ? `/uploads/${req.file.filename}` : null;
+  const id = req.params.id;
+
+  db.run(
+    'UPDATE shows SET title = ?, description = ?, category = ?, image = COALESCE(?, image) WHERE id = ?',
+    [title, description, category, image, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Show not found' });
+      res.json({ id, title, description, category, image });
     }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Show not found' });
-    }
-    res.status(204).end();
+  );
+});
+
+router.delete('/:id', [
+  param('id').isInt().withMessage('ID must be an integer')
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  db.run('DELETE FROM shows WHERE id = ?', [req.params.id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Show not found' });
+    res.json({ message: 'Show deleted successfully' });
   });
 });
 
