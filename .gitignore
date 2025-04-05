@@ -1,7 +1,22 @@
-**/*.dart
-**/*.js
-**/*.json
-**/*.yaml
-**/*.yml
-**/*.lock
-**/*.dart_tool
+﻿# Flutter
+show_app/.dart_tool/
+show_app/build/
+show_app/.packages
+show_app/pubspec.lock
+
+# Node
+node_modules/
+npm-debug.log
+
+# Environnements
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Système
+.DS_Store
+Thumbs.db
